@@ -11,4 +11,4 @@ namespace DotnetCRUD.Data
         public DbSet<User> Users => Set<User>();
         public DbSet<Product> Products => Set<Product>();
     }
-}
+};

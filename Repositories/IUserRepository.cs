@@ -1,10 +1,13 @@
 using DotnetCRUD.Models;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
-namespace DotnetCRUD.Repositories
+namespace DotnetCRUD.Repositories;
 
-    public interface IUserRepository
-    {
-        Task<bool> IsUniqueUser(string email);
-        Task<AuthResponseDto> RegisterAsync(RegisterDto registerDto);
-        Task<AuthResponseDto> LoginAsync(LoginDto loginDto);
-    }
+public interface IUserRepository
+{
+    Task<User?> GetByEmailAsync(string email);
+    Task<User> CreateAsync(User user);
+    Task<User?> GetByIdAsync(int id);
+    Task<List<User>> GetAllAsync();
+}

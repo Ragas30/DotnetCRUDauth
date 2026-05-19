@@ -50,4 +50,28 @@ public class AuthController : ControllerBase
             });
         }
     }
+
+    [HttpGet("user/{id}")]
+    public async Task<IActionResult> GetById(int id)
+    {
+        var user = await _authService.GetByIdAsync(id);
+
+        if (user == null)
+        {
+            return NotFound(new
+            {
+                message = "User tidak ditemukan"
+            });
+        }
+
+        return Ok(user);
+    }
+
+    [HttpGet("users")]
+    public async Task<IActionResult> GetAllUsers()
+    {
+        var users = await _authService.GetAllUsersAsync();
+        return Ok(users);
+    }
+
 }

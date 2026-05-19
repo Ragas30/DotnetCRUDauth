@@ -3,7 +3,9 @@ using DotnetCRUD.Models;
 using DotnetCRUD.Repositories;
 using Microsoft.IdentityModel.Tokens;
 using System;
+using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
@@ -108,5 +110,31 @@ public class AuthService : IAuthService
         );
 
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    public async Task<UserResponseDto?> GetByIdAsync(int id)
+    {
+        var user = await _userRepository.GetByIdAsync(id);
+        if (user == null) return null;
+
+        return new UserResponseDto
+        {
+            Id = user.Id,
+            Username = user.Username,
+            Email = user.Email,
+            Role = user.Role
+        };
+    }
+
+    public async Task<List<UserResponseDto>> GetAllUsersAsync()
+    {
+        var users = await _userRepository.GetAllAsync();
+        return users.Select(user => new UserResponseDto
+        {
+            Id = user.Id,
+            Username = user.Username,
+            Email = user.Email,
+            Role = user.Role
+        }).ToList();
     }
 }
