@@ -42,7 +42,7 @@ public class AuthService : IAuthService
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(registerDto.Password),
 
             // jangan ambil dari request
-            Role = "USER"
+            Role = UserRole.USER
         };
 
         await _userRepository.CreateAsync(user);
@@ -53,7 +53,7 @@ public class AuthService : IAuthService
         {
             Token = token,
             Username = user.Username,
-            Role = user.Role
+            Role = user.Role.ToString()
         };
     }
 
@@ -79,7 +79,7 @@ public class AuthService : IAuthService
         {
             Token = token,
             Username = user.Username,
-            Role = user.Role
+            Role = user.Role.ToString()
         };
     }
 
@@ -89,7 +89,7 @@ public class AuthService : IAuthService
         {
             new Claim(ClaimTypes.Name, user.Username),
             new Claim(ClaimTypes.Email, user.Email),
-            new Claim(ClaimTypes.Role, user.Role)
+            new Claim(ClaimTypes.Role, user.Role.ToString())
         };
 
         var key = new SymmetricSecurityKey(
@@ -122,7 +122,7 @@ public class AuthService : IAuthService
             Id = user.Id,
             Username = user.Username,
             Email = user.Email,
-            Role = user.Role
+            Role = user.Role.ToString()
         };
     }
 
@@ -134,7 +134,7 @@ public class AuthService : IAuthService
             Id = user.Id,
             Username = user.Username,
             Email = user.Email,
-            Role = user.Role
+            Role = user.Role.ToString()
         }).ToList();
     }
 }

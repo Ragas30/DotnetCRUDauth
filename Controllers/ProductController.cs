@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace DotnetCRUD.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/Product")]
     public class ProductController : ControllerBase
     {
         private readonly IProductService _productService;

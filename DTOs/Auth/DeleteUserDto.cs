@@ -2,7 +2,7 @@ using DotnetCRUD.Models;
 
 namespace DotnetCRUD.DTOs.Auth;
 
-public class UserResponseDto
+public class DeleteUserDto
 {
     public int Id { get; set; }
     public string Username { get; set; } = string.Empty;

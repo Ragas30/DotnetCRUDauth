@@ -65,17 +65,63 @@ dotnet ef migrations add InitialCreate
 dotnet ef database update
 ```
 
+Urutan command yang benar saat update schema:
+```bash
+dotnet ef migrations add NamaMigration
+dotnet ef database update
+```
+
+Contoh:
+```bash
+dotnet ef migrations add UpdateUserRoleToEnum
+dotnet ef database update
+```
+
+Catatan penting:
+- Jangan pakai `dotnet ef migrations database update` (salah command).
+- `database update` adalah command level `ef`, bukan subcommand `migrations`.
+
 Jika `dotnet ef` belum tersedia:
 ```bash
 dotnet tool install --global dotnet-ef
 ```
 
-## 7. Menjalankan Aplikasi
+## 7. Kapan Harus Buat Migration?
+Buat migration jika ada perubahan pada struktur yang dipetakan EF Core, misalnya:
+- tambah/hapus properti di model (`User`, `Product`, dll)
+- ubah tipe data properti (contoh `string` -> `enum`)
+- ubah relasi, foreign key, index, constraint
+- ubah konfigurasi di `OnModelCreating` (converter, max length, dsb)
+
+Tidak perlu migration jika hanya:
+- ubah logic di Controller/Service/Repository
+- ubah validasi request
+- ubah proses generate JWT, response DTO, atau business flow tanpa ubah schema DB
+
+Checklist aman tiap ubah schema:
+1. Ubah model / konfigurasi EF (`Models`, `AppDbContext`).
+2. `dotnet build` pastikan compile.
+3. `dotnet ef migrations add <NamaMigration>`.
+4. Cek file migration yang dihasilkan.
+5. `dotnet ef database update`.
+6. Jalankan app dan test endpoint terkait.
+
+## 8. Menjalankan Aplikasi
 ```bash
 dotnet run
 ```
 
-## 8. Troubleshooting Umum
+## 9. Role & JWT (Quick Checklist)
+- Simpan role di model sebagai enum (`USER`, `ADMIN`) agar nilai role terkontrol.
+- Saat generate token, pastikan claim role diisi:
+  - `new Claim(ClaimTypes.Role, user.Role.ToString())`
+- Di endpoint:
+  - `[Authorize]` untuk semua user login
+  - `[Authorize(Roles = "ADMIN")]` untuk admin-only
+- Jika status `401/403`, cek token/role.
+- Jika status `500` dengan pesan `Unable to resolve service`, cek registrasi DI di `Program.cs`.
+
+## 10. Troubleshooting Umum
 - Jika `dotnet build` gagal dengan error file terkunci (`MSB3021/MSB3027`):
   - Hentikan proses app yang masih berjalan (`Ctrl + C`).
   - Atau kill process:

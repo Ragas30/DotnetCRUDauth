@@ -1,5 +1,6 @@
 using DotnetCRUD.DTOs.Auth;
 using DotnetCRUD.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Threading.Tasks;
@@ -51,6 +52,7 @@ public class AuthController : ControllerBase
         }
     }
 
+    [Authorize(Roles = "ADMIN")]
     [HttpGet("user/{id}")]
     public async Task<IActionResult> GetById(int id)
     {
