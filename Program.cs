@@ -5,6 +5,8 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using DotnetCRUD.Repositories;
 using DotnetCRUD.Services;
+using DotnetCRUD.Validators.Auth;
+using FluentValidation;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,6 +15,7 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
+builder.Services.AddValidatorsFromAssemblyContaining<RegisterDtoValidator>();
 
 // Database setup
 builder.Services.AddDbContext<AppDbContext>(options =>

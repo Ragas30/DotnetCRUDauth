@@ -121,7 +121,35 @@ dotnet run
 - Jika status `401/403`, cek token/role.
 - Jika status `500` dengan pesan `Unable to resolve service`, cek registrasi DI di `Program.cs`.
 
-## 10. Troubleshooting Umum
+## 10. Proteksi Endpoint Dengan Bearer
+1. Pastikan middleware aktif dan urutannya benar:
+```csharp
+app.UseAuthentication();
+app.UseAuthorization();
+```
+
+2. Pasang atribut di controller/endpoint:
+- Semua user yang login:
+  - `[Authorize]`
+- Hanya role tertentu:
+  - `[Authorize(Roles = "ADMIN")]`
+  - `[Authorize(Roles = "ADMIN,USER")]`
+
+3. Header request harus berisi token:
+```http
+Authorization: Bearer <token_jwt>
+```
+
+4. Arti status code:
+- `401 Unauthorized`: token tidak ada, format salah, expired, atau signature tidak valid.
+- `403 Forbidden`: token valid, tapi role tidak punya akses endpoint.
+
+5. Testing cepat di Swagger:
+- Klik `Authorize`
+- Isi: `Bearer <token_jwt>`
+- Coba endpoint `[Authorize]` dan endpoint `[Authorize(Roles = "...")]`
+
+## 11. Troubleshooting Umum
 - Jika `dotnet build` gagal dengan error file terkunci (`MSB3021/MSB3027`):
   - Hentikan proses app yang masih berjalan (`Ctrl + C`).
   - Atau kill process:

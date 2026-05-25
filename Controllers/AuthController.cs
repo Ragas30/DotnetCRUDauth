@@ -1,8 +1,10 @@
 using DotnetCRUD.DTOs.Auth;
 using DotnetCRUD.Services;
+using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace DotnetCRUD.Controllers;
@@ -12,15 +14,36 @@ namespace DotnetCRUD.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
+    private readonly IValidator<RegisterDto> _registerValidator;
+    private readonly IValidator<LoginDto> _loginValidator;
 
-    public AuthController(IAuthService authService)
+    public AuthController(
+        IAuthService authService,
+        IValidator<RegisterDto> registerValidator,
+        IValidator<LoginDto> loginValidator)
     {
         _authService = authService;
+        _registerValidator = registerValidator;
+        _loginValidator = loginValidator;
     }
 
     [HttpPost("register")]
+    [AllowAnonymous]
     public async Task<IActionResult> Register(RegisterDto dto)
     {
+        var validationResult = await _registerValidator.ValidateAsync(dto);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                errors = validationResult.Errors.Select(error => new
+                {
+                    field = error.PropertyName,
+                    message = error.ErrorMessage
+                })
+            });
+        }
+
         try
         {
             var result = await _authService.RegisterAsync(dto);
@@ -36,8 +59,22 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("login")]
+    [AllowAnonymous]
     public async Task<IActionResult> Login(LoginDto dto)
     {
+        var validationResult = await _loginValidator.ValidateAsync(dto);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                errors = validationResult.Errors.Select(error => new
+                {
+                    field = error.PropertyName,
+                    message = error.ErrorMessage
+                })
+            });
+        }
+
         try
         {
             var result = await _authService.LoginAsync(dto);
@@ -69,6 +106,7 @@ public class AuthController : ControllerBase
         return Ok(user);
     }
 
+    [Authorize(Roles = "ADMIN")]
     [HttpGet("users")]
     public async Task<IActionResult> GetAllUsers()
     {
