@@ -128,6 +128,7 @@ Produk ini menyelesaikan masalah tersebut melalui sistem booking terstruktur den
 - Logging terpusat (Serilog).
 - Data integrity via FK + transaction untuk proses kritikal.
 - Audit fields: `CreatedAt`, `UpdatedAt`, `CreatedBy`, `UpdatedBy`.
+- Event-level audit trail untuk aksi kritikal (booking, assignment, status change, payment update).
 - Soft delete untuk entity tertentu (mis. vehicle/service catalog bila diperlukan).
 - API documented via Swagger/OpenAPI.
 
@@ -154,6 +155,7 @@ Entitas inti:
 - `ServiceRecord`
 - `VehicleConditionPhoto`
 - `PaymentTransaction`
+- `AuditLog`
 
 ## 11. API Blueprint (High-Level)
 ### 11.1 Auth
@@ -195,6 +197,10 @@ Entitas inti:
 - `PUT /api/bookings/{id}/payment/manual` (Admin fallback manual payment)
 - `GET /api/bookings/{id}/invoice`
 
+### 11.8 Audit
+- `GET /api/audit-logs` (Admin, filter by entity/action/date/actor, paginated)
+- `GET /api/audit-logs/{id}` (Admin)
+
 ## 12. Security & Access Control
 - JWT Bearer Authentication.
 - Role-based authorization policy.
@@ -214,6 +220,7 @@ Entitas inti:
 - Integration test prioritas:
   - End-to-end booking flow.
   - Payment webhook flow + idempotency.
+  - Audit log creation pada create/update/delete dan event bisnis utama.
 
 ## 14. Deployment & DevOps Plan
 - Dockerfile untuk API.
@@ -306,6 +313,18 @@ Entitas inti:
 - `RawNotificationPayload`
 - `CreatedAt`
 - `UpdatedAt`
+
+### C.6 Audit Log Minimum Fields
+- `Id`
+- `EntityName`
+- `EntityId`
+- `Action` (`CREATE`, `UPDATE`, `DELETE`, `STATUS_CHANGE`, `PAYMENT_UPDATE`)
+- `OldValues` (json)
+- `NewValues` (json)
+- `ActorUserId`
+- `ActorRole`
+- `CorrelationId`
+- `OccurredAt`
 
 ### C.4 Mapping Status Midtrans -> Internal
 - `settlement` atau `capture` -> `Paid`

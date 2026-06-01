@@ -3,6 +3,7 @@ using System;
 using DotnetCRUD.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace DotnetCRUD.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260525152414_Phase1FoundationBooking")]
+    partial class Phase1FoundationBooking
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -249,6 +252,32 @@ namespace DotnetCRUD.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Users");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Email = "admin@autocare.local",
+                            PasswordHash = "$2a$11$3bGgCW.rYl4QNY8HMtnbRuDgSHXDIxwxt867EsuninAJUlw4x754y",
+                            Role = "ADMIN",
+                            Username = "admin"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Email = "mechanic@autocare.local",
+                            PasswordHash = "$2a$11$rTSXCDetpkIJnbmw8Euktuo0pQB469kyn0AnuNO/TmN9BZpiLFCN.",
+                            Role = "MECHANIC",
+                            Username = "mechanic01"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Email = "customer@autocare.local",
+                            PasswordHash = "$2a$11$dN.qAjMwj.2UILp.h0zw0u9xyjzPvZYXlCF7zhdbtTDLtF6ajKxQC",
+                            Role = "CUSTOMER",
+                            Username = "customer01"
+                        });
                 });
 
             modelBuilder.Entity("DotnetCRUD.Models.Vehicle", b =>
