@@ -109,6 +109,7 @@ Produk ini menyelesaikan masalah tersebut melalui sistem booking terstruktur den
 - Admin/mechanic input estimasi biaya.
 - Mekanik mengisi catatan teknis hasil servis.
 - Saat selesai, generate service summary.
+- Sistem menyimpan rekomendasi servis berikutnya berdasarkan tanggal atau kilometer.
 
 ### 7.7 Service History
 - Customer melihat riwayat lengkap per kendaraan.
@@ -184,8 +185,8 @@ Entitas inti:
 - `PUT /api/bookings/{id}/assign-mechanic`
 
 ### 11.5 History & Notes
-- `POST /api/bookings/{id}/estimate`
-- `POST /api/bookings/{id}/service-notes`
+- `PUT /api/bookings/{id}/estimate`
+- `PUT /api/bookings/{id}/service-notes`
 - `GET /api/vehicles/{id}/service-history`
 
 ### 11.6 Upload

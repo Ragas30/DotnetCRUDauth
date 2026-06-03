@@ -1,21 +1,21 @@
-namespace DotnetCRUD.Models;
+using DotnetCRUD.Models;
 
-public class Booking : AuditableEntity
+namespace DotnetCRUD.DTOs.Booking;
+
+public class BookingResponseDto
 {
     public int Id { get; set; }
     public int VehicleId { get; set; }
+    public string PlateNumber { get; set; } = string.Empty;
     public int ServiceCatalogId { get; set; }
+    public string ServiceName { get; set; } = string.Empty;
     public DateTime BookingDateTime { get; set; }
     public string Complaint { get; set; } = string.Empty;
-    public BookingStatus Status { get; set; } = BookingStatus.BOOKED;
+    public BookingStatus Status { get; set; }
     public decimal? EstimatedCost { get; set; }
     public string? ServiceNotes { get; set; }
     public DateTime? CompletedAt { get; set; }
     public DateTime? RecommendedNextServiceDate { get; set; }
     public int? RecommendedNextServiceMileage { get; set; }
     public int? MechanicId { get; set; }
-
-    public Vehicle? Vehicle { get; set; }
-    public ServiceCatalog? ServiceCatalog { get; set; }
-    public User? Mechanic { get; set; }
 }
