@@ -9,6 +9,7 @@ public class Booking : AuditableEntity
     public string Complaint { get; set; } = string.Empty;
     public BookingStatus Status { get; set; } = BookingStatus.BOOKED;
     public decimal? EstimatedCost { get; set; }
+    public PaymentStatus PaymentStatus { get; set; } = PaymentStatus.UNPAID;
     public string? ServiceNotes { get; set; }
     public DateTime? CompletedAt { get; set; }
     public DateTime? RecommendedNextServiceDate { get; set; }
@@ -18,4 +19,5 @@ public class Booking : AuditableEntity
     public Vehicle? Vehicle { get; set; }
     public ServiceCatalog? ServiceCatalog { get; set; }
     public User? Mechanic { get; set; }
+    public ICollection<PaymentTransaction> PaymentTransactions { get; set; } = new List<PaymentTransaction>();
 }

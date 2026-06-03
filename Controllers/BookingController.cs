@@ -17,6 +17,7 @@ public class BookingController : ControllerBase
     private readonly IValidator<AssignMechanicDto> _assignValidator;
     private readonly IValidator<UpdateBookingEstimateDto> _estimateValidator;
     private readonly IValidator<UpdateBookingServiceNotesDto> _serviceNotesValidator;
+    private readonly IValidator<ManualPaymentDto> _manualPaymentValidator;
 
     public BookingController(
         IBookingService bookingService,
@@ -24,7 +25,8 @@ public class BookingController : ControllerBase
         IValidator<UpdateBookingStatusDto> statusValidator,
         IValidator<AssignMechanicDto> assignValidator,
         IValidator<UpdateBookingEstimateDto> estimateValidator,
-        IValidator<UpdateBookingServiceNotesDto> serviceNotesValidator)
+        IValidator<UpdateBookingServiceNotesDto> serviceNotesValidator,
+        IValidator<ManualPaymentDto> manualPaymentValidator)
     {
         _bookingService = bookingService;
         _createValidator = createValidator;
@@ -32,6 +34,7 @@ public class BookingController : ControllerBase
         _assignValidator = assignValidator;
         _estimateValidator = estimateValidator;
         _serviceNotesValidator = serviceNotesValidator;
+        _manualPaymentValidator = manualPaymentValidator;
     }
 
     [HttpGet]
@@ -225,5 +228,50 @@ public class BookingController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+    }
+
+    [HttpPut("{id:int}/payment/manual")]
+    [Authorize(Roles = "ADMIN")]
+    public async Task<IActionResult> RecordManualPayment(int id, ManualPaymentDto dto)
+    {
+        var validationResult = await _manualPaymentValidator.ValidateAsync(dto);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                errors = validationResult.Errors.Select(error => new
+                {
+                    field = error.PropertyName,
+                    message = error.ErrorMessage
+                })
+            });
+        }
+
+        try
+        {
+            var result = await _bookingService.RecordManualPaymentAsync(id, dto);
+            if (result == null)
+            {
+                return NotFound(new { message = "Booking tidak ditemukan" });
+            }
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpGet("{id:int}/invoice")]
+    public async Task<IActionResult> GetInvoice(int id)
+    {
+        var result = await _bookingService.GetInvoiceAsync(id);
+        if (result == null)
+        {
+            return NotFound(new { message = "Invoice tidak ditemukan" });
+        }
+
+        return Ok(result);
     }
 }

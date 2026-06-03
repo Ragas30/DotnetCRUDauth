@@ -24,11 +24,14 @@ namespace DotnetCRUD.Data
         public DbSet<Vehicle> Vehicles => Set<Vehicle>();
         public DbSet<ServiceCatalog> ServiceCatalogs => Set<ServiceCatalog>();
         public DbSet<Booking> Bookings => Set<Booking>();
+        public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
         public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
          protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             var userRoleConverter = new EnumToStringConverter<UserRole>();
             var bookingStatusConverter = new EnumToStringConverter<BookingStatus>();
+            var paymentStatusConverter = new EnumToStringConverter<PaymentStatus>();
+            var paymentMethodConverter = new EnumToStringConverter<PaymentMethod>();
 
             modelBuilder.Entity<User>()
                 .Property(u => u.Role)
@@ -38,6 +41,21 @@ namespace DotnetCRUD.Data
             modelBuilder.Entity<Booking>()
                 .Property(b => b.Status)
                 .HasConversion(bookingStatusConverter)
+                .HasMaxLength(20);
+
+            modelBuilder.Entity<Booking>()
+                .Property(b => b.PaymentStatus)
+                .HasConversion(paymentStatusConverter)
+                .HasMaxLength(20);
+
+            modelBuilder.Entity<PaymentTransaction>()
+                .Property(p => p.PaymentStatus)
+                .HasConversion(paymentStatusConverter)
+                .HasMaxLength(20);
+
+            modelBuilder.Entity<PaymentTransaction>()
+                .Property(p => p.PaymentMethod)
+                .HasConversion(paymentMethodConverter)
                 .HasMaxLength(20);
 
             modelBuilder.Entity<Vehicle>()
@@ -67,6 +85,12 @@ namespace DotnetCRUD.Data
                 .WithMany()
                 .HasForeignKey(b => b.MechanicId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<PaymentTransaction>()
+                .HasOne(p => p.Booking)
+                .WithMany(b => b.PaymentTransactions)
+                .HasForeignKey(p => p.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
 
         }
 

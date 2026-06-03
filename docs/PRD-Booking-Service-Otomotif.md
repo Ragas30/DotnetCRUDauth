@@ -197,6 +197,7 @@ Entitas inti:
 - `POST /api/payments/webhook/midtrans` (callback status dari Midtrans)
 - `PUT /api/bookings/{id}/payment/manual` (Admin fallback manual payment)
 - `GET /api/bookings/{id}/invoice`
+- MVP implementation saat ini: `manual payment + invoice`, gateway sandbox disiapkan pada model/flow berikutnya.
 
 ### 11.8 Audit
 - `GET /api/audit-logs` (Admin, filter by entity/action/date/actor, paginated)

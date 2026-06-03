@@ -13,6 +13,7 @@ public class BookingResponseDto
     public string Complaint { get; set; } = string.Empty;
     public BookingStatus Status { get; set; }
     public decimal? EstimatedCost { get; set; }
+    public PaymentStatus PaymentStatus { get; set; }
     public string? ServiceNotes { get; set; }
     public DateTime? CompletedAt { get; set; }
     public DateTime? RecommendedNextServiceDate { get; set; }

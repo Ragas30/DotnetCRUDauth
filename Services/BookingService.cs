@@ -9,6 +9,7 @@ namespace DotnetCRUD.Services;
 public class BookingService : IBookingService
 {
     private readonly IBookingRepository _bookingRepository;
+    private readonly IPaymentTransactionRepository _paymentTransactionRepository;
     private readonly IVehicleRepository _vehicleRepository;
     private readonly IServiceCatalogRepository _serviceCatalogRepository;
     private readonly IUserRepository _userRepository;
@@ -16,12 +17,14 @@ public class BookingService : IBookingService
 
     public BookingService(
         IBookingRepository bookingRepository,
+        IPaymentTransactionRepository paymentTransactionRepository,
         IVehicleRepository vehicleRepository,
         IServiceCatalogRepository serviceCatalogRepository,
         IUserRepository userRepository,
         IHttpContextAccessor httpContextAccessor)
     {
         _bookingRepository = bookingRepository;
+        _paymentTransactionRepository = paymentTransactionRepository;
         _vehicleRepository = vehicleRepository;
         _serviceCatalogRepository = serviceCatalogRepository;
         _userRepository = userRepository;
@@ -274,6 +277,118 @@ public class BookingService : IBookingService
         }).ToList();
     }
 
+    public async Task<BookingResponseDto?> RecordManualPaymentAsync(int bookingId, ManualPaymentDto dto)
+    {
+        var role = GetCurrentUserRole();
+        var userId = GetCurrentUserId();
+
+        if (role != UserRole.ADMIN)
+        {
+            throw new Exception("Hanya admin yang dapat memproses pembayaran manual");
+        }
+
+        var booking = await _bookingRepository.GetByIdAsync(bookingId);
+        if (booking == null)
+        {
+            return null;
+        }
+
+        if (booking.Status != BookingStatus.DONE)
+        {
+            throw new Exception("Pembayaran manual hanya bisa diproses setelah servis selesai");
+        }
+
+        var expectedAmount = booking.EstimatedCost ?? 0m;
+        if (expectedAmount <= 0)
+        {
+            throw new Exception("Estimasi biaya belum tersedia");
+        }
+
+        if (dto.PaidAmount < expectedAmount)
+        {
+            throw new Exception("Jumlah pembayaran kurang dari estimasi biaya");
+        }
+
+        var paymentTransaction = new PaymentTransaction
+        {
+            BookingId = booking.Id,
+            Provider = "MANUAL",
+            PaymentMethod = dto.PaymentMethod,
+            PaymentStatus = PaymentStatus.PAID,
+            Amount = dto.PaidAmount,
+            ReferenceNumber = string.IsNullOrWhiteSpace(dto.ReferenceNumber) ? null : dto.ReferenceNumber.Trim(),
+            PaidAt = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow,
+            CreatedBy = userId.ToString()
+        };
+
+        await _paymentTransactionRepository.CreateAsync(paymentTransaction);
+
+        booking.PaymentStatus = PaymentStatus.PAID;
+        booking.Status = BookingStatus.PAID;
+        booking.UpdatedAt = DateTime.UtcNow;
+        booking.UpdatedBy = userId.ToString();
+
+        await _bookingRepository.UpdateAsync(booking);
+        var updated = await _bookingRepository.GetByIdAsync(bookingId);
+
+        return updated == null ? null : MapToResponse(updated);
+    }
+
+    public async Task<BookingInvoiceDto?> GetInvoiceAsync(int bookingId)
+    {
+        var role = GetCurrentUserRole();
+        var userId = GetCurrentUserId();
+
+        Booking? booking;
+
+        if (role == UserRole.ADMIN)
+        {
+            booking = await _bookingRepository.GetByIdAsync(bookingId);
+        }
+        else if (role == UserRole.CUSTOMER)
+        {
+            booking = await _bookingRepository.GetByIdForCustomerAsync(bookingId, userId);
+        }
+        else if (role == UserRole.MECHANIC)
+        {
+            booking = await _bookingRepository.GetByIdAsync(bookingId);
+            if (booking?.MechanicId != userId)
+            {
+                return null;
+            }
+        }
+        else
+        {
+            booking = null;
+        }
+
+        if (booking == null)
+        {
+            return null;
+        }
+
+        var latestPayment = booking.PaymentTransactions
+            .OrderByDescending(payment => payment.CreatedAt)
+            .FirstOrDefault();
+
+        return new BookingInvoiceDto
+        {
+            BookingId = booking.Id,
+            PlateNumber = booking.Vehicle?.PlateNumber ?? string.Empty,
+            ServiceName = booking.ServiceCatalog?.Name ?? string.Empty,
+            BookingDateTime = booking.BookingDateTime,
+            CompletedAt = booking.CompletedAt,
+            EstimatedCost = booking.EstimatedCost ?? 0m,
+            PaymentStatus = booking.PaymentStatus,
+            PaymentMethod = latestPayment?.PaymentMethod,
+            PaidAmount = latestPayment?.Amount,
+            PaidAt = latestPayment?.PaidAt,
+            ReferenceNumber = latestPayment?.ReferenceNumber,
+            ServiceNotes = booking.ServiceNotes
+        };
+    }
+
     public async Task<BookingResponseDto?> AssignMechanicAsync(int bookingId, AssignMechanicDto dto)
     {
         var role = GetCurrentUserRole();
@@ -359,6 +474,7 @@ public class BookingService : IBookingService
             Complaint = booking.Complaint,
             Status = booking.Status,
             EstimatedCost = booking.EstimatedCost,
+            PaymentStatus = booking.PaymentStatus,
             ServiceNotes = booking.ServiceNotes,
             CompletedAt = booking.CompletedAt,
             RecommendedNextServiceDate = booking.RecommendedNextServiceDate,

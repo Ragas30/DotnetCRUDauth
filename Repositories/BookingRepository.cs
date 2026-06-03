@@ -81,6 +81,7 @@ public class BookingRepository : IBookingRepository
         return _context.Bookings
             .Include(b => b.Vehicle)
             .Include(b => b.ServiceCatalog)
-            .Include(b => b.Mechanic);
+            .Include(b => b.Mechanic)
+            .Include(b => b.PaymentTransactions);
     }
 }
