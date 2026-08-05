@@ -1,4 +1,5 @@
 using DotnetCRUD.DTOs.Booking;
+using DotnetCRUD.Exceptions;
 using DotnetCRUD.Models;
 using DotnetCRUD.Repositories;
 using Microsoft.AspNetCore.Http;
@@ -14,6 +15,7 @@ public class BookingService : IBookingService
     private readonly IServiceCatalogRepository _serviceCatalogRepository;
     private readonly IUserRepository _userRepository;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly ILogger<BookingService> _logger;
 
     public BookingService(
         IBookingRepository bookingRepository,
@@ -21,7 +23,8 @@ public class BookingService : IBookingService
         IVehicleRepository vehicleRepository,
         IServiceCatalogRepository serviceCatalogRepository,
         IUserRepository userRepository,
-        IHttpContextAccessor httpContextAccessor)
+        IHttpContextAccessor httpContextAccessor,
+        ILogger<BookingService> logger)
     {
         _bookingRepository = bookingRepository;
         _paymentTransactionRepository = paymentTransactionRepository;
@@ -29,6 +32,7 @@ public class BookingService : IBookingService
         _serviceCatalogRepository = serviceCatalogRepository;
         _userRepository = userRepository;
         _httpContextAccessor = httpContextAccessor;
+        _logger = logger;
     }
 
     public async Task<List<BookingResponseDto>> GetBookingsAsync()
@@ -54,7 +58,7 @@ public class BookingService : IBookingService
         return bookings.Select(MapToResponse).ToList();
     }
 
-    public async Task<BookingResponseDto?> GetBookingByIdAsync(int id)
+    public async Task<BookingResponseDto> GetBookingByIdAsync(int id)
     {
         var role = GetCurrentUserRole();
         var userId = GetCurrentUserId();
@@ -70,7 +74,7 @@ public class BookingService : IBookingService
             booking = await _bookingRepository.GetByIdAsync(id);
             if (booking?.MechanicId != userId)
             {
-                return null;
+                throw new NotFoundException("BOOKING_NOT_FOUND", "Booking tidak ditemukan");
             }
         }
         else
@@ -78,7 +82,9 @@ public class BookingService : IBookingService
             booking = await _bookingRepository.GetByIdForCustomerAsync(id, userId);
         }
 
-        return booking == null ? null : MapToResponse(booking);
+        return booking == null
+            ? throw new NotFoundException("BOOKING_NOT_FOUND", "Booking tidak ditemukan")
+            : MapToResponse(booking);
     }
 
     public async Task<BookingResponseDto> CreateBookingAsync(CreateBookingDto dto)
@@ -88,21 +94,16 @@ public class BookingService : IBookingService
         var vehicle = await _vehicleRepository.GetByIdAndUserIdAsync(dto.VehicleId, userId);
         if (vehicle == null)
         {
-            throw new Exception("Kendaraan tidak ditemukan atau bukan milik Anda");
+            throw new NotFoundException("VEHICLE_NOT_FOUND", "Kendaraan tidak ditemukan atau bukan milik Anda");
         }
 
         var serviceCatalog = await _serviceCatalogRepository.GetByIdAsync(dto.ServiceCatalogId);
         if (serviceCatalog == null || !serviceCatalog.IsActive)
         {
-            throw new Exception("Layanan tidak ditemukan atau tidak aktif");
+            throw new NotFoundException("SERVICE_NOT_FOUND", "Layanan tidak ditemukan atau tidak aktif");
         }
 
         var bookingTimeUtc = dto.BookingDateTime.ToUniversalTime();
-        var slotTaken = await _bookingRepository.IsTimeSlotTakenAsync(bookingTimeUtc, dto.ServiceCatalogId);
-        if (slotTaken)
-        {
-            throw new Exception("Slot booking pada waktu tersebut sudah terisi");
-        }
 
         var booking = new Booking
         {
@@ -115,18 +116,15 @@ public class BookingService : IBookingService
             CreatedBy = userId.ToString()
         };
 
-        await _bookingRepository.CreateAsync(booking);
-        var created = await _bookingRepository.GetByIdAsync(booking.Id);
+        var created = await _bookingRepository.CreateWithSlotGuardAsync(booking, serviceCatalog.DurationMinutes);
 
-        if (created == null)
-        {
-            throw new Exception("Gagal mengambil data booking setelah dibuat");
-        }
+        _logger.LogInformation("Booking baru dibuat: {BookingId}, User {UserId}, Service {ServiceId}, Slot {Slot:O}",
+            created.Id, userId, created.ServiceCatalogId, created.BookingDateTime);
 
         return MapToResponse(created);
     }
 
-    public async Task<BookingResponseDto?> UpdateStatusAsync(int bookingId, UpdateBookingStatusDto dto)
+    public async Task<BookingResponseDto> UpdateStatusAsync(int bookingId, UpdateBookingStatusDto dto)
     {
         var userId = GetCurrentUserId();
         var role = GetCurrentUserRole();
@@ -134,20 +132,22 @@ public class BookingService : IBookingService
         var booking = await _bookingRepository.GetByIdAsync(bookingId);
         if (booking == null)
         {
-            return null;
+            throw new NotFoundException("BOOKING_NOT_FOUND", "Booking tidak ditemukan");
         }
 
         if (role == UserRole.MECHANIC && booking.MechanicId != userId)
         {
-            throw new Exception("Anda hanya bisa update booking yang di-assign ke Anda");
+            throw new ForbiddenException("FORBIDDEN", "Anda hanya bisa update booking yang di-assign ke Anda");
         }
 
         if (role == UserRole.CUSTOMER)
         {
-            throw new Exception("Customer tidak diizinkan mengubah status booking");
+            throw new ForbiddenException("FORBIDDEN", "Customer tidak diizinkan mengubah status booking");
         }
 
         ValidateStatusTransition(booking.Status, dto.Status);
+
+        var oldStatus = booking.Status;
 
         booking.Status = dto.Status;
         if (dto.Status == BookingStatus.DONE)
@@ -160,33 +160,36 @@ public class BookingService : IBookingService
         await _bookingRepository.UpdateAsync(booking);
         var updated = await _bookingRepository.GetByIdAsync(bookingId);
 
-        return updated == null ? null : MapToResponse(updated);
+        _logger.LogInformation("Booking {BookingId} status berubah dari {From} ke {To} oleh User {UserId}",
+            bookingId, oldStatus, booking.Status, userId);
+
+        return MapToResponse(updated!);
     }
 
-    public async Task<BookingResponseDto?> UpdateEstimateAsync(int bookingId, UpdateBookingEstimateDto dto)
+    public async Task<BookingResponseDto> UpdateEstimateAsync(int bookingId, UpdateBookingEstimateDto dto)
     {
         var role = GetCurrentUserRole();
         var userId = GetCurrentUserId();
 
         if (role != UserRole.ADMIN && role != UserRole.MECHANIC)
         {
-            throw new Exception("Anda tidak diizinkan mengubah estimasi biaya");
+            throw new ForbiddenException("FORBIDDEN", "Anda tidak diizinkan mengubah estimasi biaya");
         }
 
         var booking = await _bookingRepository.GetByIdAsync(bookingId);
         if (booking == null)
         {
-            return null;
+            throw new NotFoundException("BOOKING_NOT_FOUND", "Booking tidak ditemukan");
         }
 
         if (role == UserRole.MECHANIC && booking.MechanicId != userId)
         {
-            throw new Exception("Anda hanya bisa update booking yang di-assign ke Anda");
+            throw new ForbiddenException("FORBIDDEN", "Anda hanya bisa update booking yang di-assign ke Anda");
         }
 
         if (booking.Status == BookingStatus.CANCELED || booking.Status == BookingStatus.PAID)
         {
-            throw new Exception("Estimasi biaya tidak bisa diubah pada status booking saat ini");
+            throw new BusinessRuleException("INVALID_BOOKING_STATUS", "Estimasi biaya tidak bisa diubah pada status booking saat ini");
         }
 
         booking.EstimatedCost = dto.EstimatedCost;
@@ -196,33 +199,33 @@ public class BookingService : IBookingService
         await _bookingRepository.UpdateAsync(booking);
         var updated = await _bookingRepository.GetByIdAsync(bookingId);
 
-        return updated == null ? null : MapToResponse(updated);
+        return MapToResponse(updated!);
     }
 
-    public async Task<BookingResponseDto?> UpdateServiceNotesAsync(int bookingId, UpdateBookingServiceNotesDto dto)
+    public async Task<BookingResponseDto> UpdateServiceNotesAsync(int bookingId, UpdateBookingServiceNotesDto dto)
     {
         var role = GetCurrentUserRole();
         var userId = GetCurrentUserId();
 
         if (role != UserRole.ADMIN && role != UserRole.MECHANIC)
         {
-            throw new Exception("Anda tidak diizinkan mengubah catatan servis");
+            throw new ForbiddenException("FORBIDDEN", "Anda tidak diizinkan mengubah catatan servis");
         }
 
         var booking = await _bookingRepository.GetByIdAsync(bookingId);
         if (booking == null)
         {
-            return null;
+            throw new NotFoundException("BOOKING_NOT_FOUND", "Booking tidak ditemukan");
         }
 
         if (role == UserRole.MECHANIC && booking.MechanicId != userId)
         {
-            throw new Exception("Anda hanya bisa update booking yang di-assign ke Anda");
+            throw new ForbiddenException("FORBIDDEN", "Anda hanya bisa update booking yang di-assign ke Anda");
         }
 
         if (booking.Status != BookingStatus.INSERVICE && booking.Status != BookingStatus.DONE)
         {
-            throw new Exception("Catatan servis hanya bisa diisi saat kendaraan sedang atau sudah selesai diservis");
+            throw new BusinessRuleException("INVALID_BOOKING_STATUS", "Catatan servis hanya bisa diisi saat kendaraan sedang atau sudah selesai diservis");
         }
 
         booking.ServiceNotes = dto.ServiceNotes.Trim();
@@ -234,7 +237,7 @@ public class BookingService : IBookingService
         await _bookingRepository.UpdateAsync(booking);
         var updated = await _bookingRepository.GetByIdAsync(bookingId);
 
-        return updated == null ? null : MapToResponse(updated);
+        return MapToResponse(updated!);
     }
 
     public async Task<List<BookingHistoryResponseDto>> GetVehicleHistoryAsync(int vehicleId)
@@ -247,7 +250,7 @@ public class BookingService : IBookingService
             var vehicle = await _vehicleRepository.GetByIdAndUserIdAsync(vehicleId, userId);
             if (vehicle == null)
             {
-                throw new Exception("Kendaraan tidak ditemukan atau bukan milik Anda");
+                throw new NotFoundException("VEHICLE_NOT_FOUND", "Kendaraan tidak ditemukan atau bukan milik Anda");
             }
         }
         else
@@ -255,7 +258,7 @@ public class BookingService : IBookingService
             var vehicle = await _vehicleRepository.GetByIdAsync(vehicleId);
             if (vehicle == null)
             {
-                throw new Exception("Kendaraan tidak ditemukan");
+                throw new NotFoundException("VEHICLE_NOT_FOUND", "Kendaraan tidak ditemukan");
             }
         }
 
@@ -277,36 +280,36 @@ public class BookingService : IBookingService
         }).ToList();
     }
 
-    public async Task<BookingResponseDto?> RecordManualPaymentAsync(int bookingId, ManualPaymentDto dto)
+    public async Task<BookingResponseDto> RecordManualPaymentAsync(int bookingId, ManualPaymentDto dto)
     {
         var role = GetCurrentUserRole();
         var userId = GetCurrentUserId();
 
         if (role != UserRole.ADMIN)
         {
-            throw new Exception("Hanya admin yang dapat memproses pembayaran manual");
+            throw new ForbiddenException("FORBIDDEN", "Hanya admin yang dapat memproses pembayaran manual");
         }
 
         var booking = await _bookingRepository.GetByIdAsync(bookingId);
         if (booking == null)
         {
-            return null;
+            throw new NotFoundException("BOOKING_NOT_FOUND", "Booking tidak ditemukan");
         }
 
         if (booking.Status != BookingStatus.DONE)
         {
-            throw new Exception("Pembayaran manual hanya bisa diproses setelah servis selesai");
+            throw new ConflictException("BOOKING_NOT_DONE", "Pembayaran manual hanya bisa diproses setelah servis selesai");
         }
 
         var expectedAmount = booking.EstimatedCost ?? 0m;
         if (expectedAmount <= 0)
         {
-            throw new Exception("Estimasi biaya belum tersedia");
+            throw new BusinessRuleException("ESTIMATE_NOT_SET", "Estimasi biaya belum tersedia");
         }
 
         if (dto.PaidAmount < expectedAmount)
         {
-            throw new Exception("Jumlah pembayaran kurang dari estimasi biaya");
+            throw new BusinessRuleException("PAYMENT_AMOUNT_TOO_LOW", "Jumlah pembayaran kurang dari estimasi biaya");
         }
 
         var paymentTransaction = new PaymentTransaction
@@ -322,6 +325,8 @@ public class BookingService : IBookingService
             CreatedBy = userId.ToString()
         };
 
+        await using var transaction = await _bookingRepository.BeginTransactionAsync();
+
         await _paymentTransactionRepository.CreateAsync(paymentTransaction);
 
         booking.PaymentStatus = PaymentStatus.PAID;
@@ -330,12 +335,17 @@ public class BookingService : IBookingService
         booking.UpdatedBy = userId.ToString();
 
         await _bookingRepository.UpdateAsync(booking);
+        await transaction.CommitAsync();
+
         var updated = await _bookingRepository.GetByIdAsync(bookingId);
 
-        return updated == null ? null : MapToResponse(updated);
+        _logger.LogInformation("Pembayaran manual tercatat untuk booking {BookingId}, jumlah {Amount}, oleh User {UserId}",
+            bookingId, dto.PaidAmount, userId);
+
+        return MapToResponse(updated!);
     }
 
-    public async Task<BookingInvoiceDto?> GetInvoiceAsync(int bookingId)
+    public async Task<BookingInvoiceDto> GetInvoiceAsync(int bookingId)
     {
         var role = GetCurrentUserRole();
         var userId = GetCurrentUserId();
@@ -355,7 +365,7 @@ public class BookingService : IBookingService
             booking = await _bookingRepository.GetByIdAsync(bookingId);
             if (booking?.MechanicId != userId)
             {
-                return null;
+                throw new NotFoundException("BOOKING_NOT_FOUND", "Booking tidak ditemukan");
             }
         }
         else
@@ -365,7 +375,7 @@ public class BookingService : IBookingService
 
         if (booking == null)
         {
-            return null;
+            throw new NotFoundException("BOOKING_NOT_FOUND", "Invoice tidak ditemukan");
         }
 
         var latestPayment = booking.PaymentTransactions
@@ -389,26 +399,26 @@ public class BookingService : IBookingService
         };
     }
 
-    public async Task<BookingResponseDto?> AssignMechanicAsync(int bookingId, AssignMechanicDto dto)
+    public async Task<BookingResponseDto> AssignMechanicAsync(int bookingId, AssignMechanicDto dto)
     {
         var role = GetCurrentUserRole();
         var userId = GetCurrentUserId();
 
         if (role != UserRole.ADMIN)
         {
-            throw new Exception("Hanya admin yang dapat assign mekanik");
+            throw new ForbiddenException("FORBIDDEN", "Hanya admin yang dapat assign mekanik");
         }
 
         var booking = await _bookingRepository.GetByIdAsync(bookingId);
         if (booking == null)
         {
-            return null;
+            throw new NotFoundException("BOOKING_NOT_FOUND", "Booking tidak ditemukan");
         }
 
         var mechanic = await _userRepository.GetByIdAsync(dto.MechanicId);
         if (mechanic == null || mechanic.Role != UserRole.MECHANIC)
         {
-            throw new Exception("Mechanic tidak ditemukan");
+            throw new NotFoundException("MECHANIC_NOT_FOUND", "Mechanic tidak ditemukan");
         }
 
         booking.MechanicId = dto.MechanicId;
@@ -418,7 +428,10 @@ public class BookingService : IBookingService
         await _bookingRepository.UpdateAsync(booking);
         var updated = await _bookingRepository.GetByIdAsync(bookingId);
 
-        return updated == null ? null : MapToResponse(updated);
+        _logger.LogInformation("Mekanik {MechanicId} di-assign ke booking {BookingId} oleh User {UserId}",
+            dto.MechanicId, bookingId, userId);
+
+        return MapToResponse(updated!);
     }
 
     private static void ValidateStatusTransition(BookingStatus current, BookingStatus next)
@@ -435,7 +448,7 @@ public class BookingService : IBookingService
 
         if (!allowed[current].Contains(next))
         {
-            throw new Exception($"Transisi status tidak valid: {current} -> {next}");
+            throw new ConflictException("INVALID_STATUS_TRANSITION", $"Transisi status tidak valid: {current} -> {next}");
         }
     }
 
@@ -444,7 +457,7 @@ public class BookingService : IBookingService
         var userIdValue = _httpContextAccessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (!int.TryParse(userIdValue, out var userId))
         {
-            throw new Exception("User tidak valid");
+            throw new UnauthorizedException("INVALID_USER", "User tidak valid");
         }
 
         return userId;
@@ -455,7 +468,7 @@ public class BookingService : IBookingService
         var roleValue = _httpContextAccessor.HttpContext?.User.FindFirstValue(ClaimTypes.Role);
         if (!Enum.TryParse<UserRole>(roleValue, out var role))
         {
-            throw new Exception("Role user tidak valid");
+            throw new UnauthorizedException("INVALID_USER", "Role user tidak valid");
         }
 
         return role;

@@ -1,4 +1,5 @@
 using DotnetCRUD.DTOs.ServiceCatalog;
+using DotnetCRUD.Exceptions;
 using DotnetCRUD.Models;
 using DotnetCRUD.Repositories;
 using Microsoft.AspNetCore.Http;
@@ -25,10 +26,12 @@ public class ServiceCatalogService : IServiceCatalogService
         return services.Select(MapToResponse).ToList();
     }
 
-    public async Task<ServiceCatalogResponseDto?> GetByIdAsync(int id)
+    public async Task<ServiceCatalogResponseDto> GetByIdAsync(int id)
     {
         var serviceCatalog = await _serviceCatalogRepository.GetByIdAsync(id);
-        return serviceCatalog == null ? null : MapToResponse(serviceCatalog);
+        return serviceCatalog == null
+            ? throw new NotFoundException("SERVICE_NOT_FOUND", "Layanan tidak ditemukan")
+            : MapToResponse(serviceCatalog);
     }
 
     public async Task<ServiceCatalogResponseDto> CreateAsync(CreateServiceCatalogDto dto)
@@ -36,7 +39,7 @@ public class ServiceCatalogService : IServiceCatalogService
         var existing = await _serviceCatalogRepository.GetByNameAsync(dto.Name.Trim());
         if (existing != null)
         {
-            throw new Exception("Nama layanan sudah terdaftar");
+            throw new ConflictException("DUPLICATE_SERVICE_NAME", "Nama layanan sudah terdaftar");
         }
 
         var actor = GetActorIdentity();
@@ -55,18 +58,18 @@ public class ServiceCatalogService : IServiceCatalogService
         return MapToResponse(entity);
     }
 
-    public async Task<ServiceCatalogResponseDto?> UpdateAsync(int id, UpdateServiceCatalogDto dto)
+    public async Task<ServiceCatalogResponseDto> UpdateAsync(int id, UpdateServiceCatalogDto dto)
     {
         var serviceCatalog = await _serviceCatalogRepository.GetByIdAsync(id);
         if (serviceCatalog == null)
         {
-            return null;
+            throw new NotFoundException("SERVICE_NOT_FOUND", "Layanan tidak ditemukan");
         }
 
         var existing = await _serviceCatalogRepository.GetByNameAsync(dto.Name.Trim());
         if (existing != null && existing.Id != id)
         {
-            throw new Exception("Nama layanan sudah dipakai layanan lain");
+            throw new ConflictException("DUPLICATE_SERVICE_NAME", "Nama layanan sudah dipakai layanan lain");
         }
 
         serviceCatalog.Name = dto.Name.Trim();
@@ -80,16 +83,15 @@ public class ServiceCatalogService : IServiceCatalogService
         return MapToResponse(serviceCatalog);
     }
 
-    public async Task<bool> DeleteAsync(int id)
+    public async Task DeleteAsync(int id)
     {
         var serviceCatalog = await _serviceCatalogRepository.GetByIdAsync(id);
         if (serviceCatalog == null)
         {
-            return false;
+            throw new NotFoundException("SERVICE_NOT_FOUND", "Layanan tidak ditemukan");
         }
 
         await _serviceCatalogRepository.DeleteAsync(serviceCatalog);
-        return true;
     }
 
     private string GetActorIdentity()

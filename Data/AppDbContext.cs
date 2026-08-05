@@ -11,7 +11,6 @@ namespace DotnetCRUD.Data
     public class AppDbContext : DbContext
     {
         private readonly IHttpContextAccessor? _httpContextAccessor;
-        private bool _isAuditing;
 
         public AppDbContext(
             DbContextOptions<AppDbContext> options,
@@ -60,7 +59,12 @@ namespace DotnetCRUD.Data
 
             modelBuilder.Entity<Vehicle>()
                 .HasIndex(v => v.PlateNumber)
-                .IsUnique();
+                .IsUnique()
+                .HasFilter("\"IsDeleted\" = false");
+
+            modelBuilder.Entity<Booking>()
+                .Property(b => b.Version)
+                .IsConcurrencyToken();
 
             modelBuilder.Entity<Vehicle>()
                 .HasOne(v => v.User)
@@ -92,31 +96,34 @@ namespace DotnetCRUD.Data
                 .HasForeignKey(p => p.BookingId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            modelBuilder.Entity<PaymentTransaction>()
+                .Property(p => p.Version)
+                .IsConcurrencyToken();
+
         }
 
         public override int SaveChanges()
         {
             var auditLogs = PrepareAuditLogs();
-            var result = base.SaveChanges();
-            PersistAuditLogs(auditLogs);
-            return result;
+            if (auditLogs.Count > 0)
+            {
+                AuditLogs.AddRange(auditLogs);
+            }
+            return base.SaveChanges();
         }
 
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
             var auditLogs = PrepareAuditLogs();
-            var result = await base.SaveChangesAsync(cancellationToken);
-            await PersistAuditLogsAsync(auditLogs, cancellationToken);
-            return result;
+            if (auditLogs.Count > 0)
+            {
+                AuditLogs.AddRange(auditLogs);
+            }
+            return await base.SaveChangesAsync(cancellationToken);
         }
 
         private List<AuditLog> PrepareAuditLogs()
         {
-            if (_isAuditing)
-            {
-                return new List<AuditLog>();
-            }
-
             ChangeTracker.DetectChanges();
 
             var user = _httpContextAccessor?.HttpContext?.User;
@@ -169,44 +176,6 @@ namespace DotnetCRUD.Data
             }
 
             return logs;
-        }
-
-        private void PersistAuditLogs(List<AuditLog> auditLogs)
-        {
-            if (auditLogs.Count == 0)
-            {
-                return;
-            }
-
-            _isAuditing = true;
-            try
-            {
-                AuditLogs.AddRange(auditLogs);
-                base.SaveChanges();
-            }
-            finally
-            {
-                _isAuditing = false;
-            }
-        }
-
-        private async Task PersistAuditLogsAsync(List<AuditLog> auditLogs, CancellationToken cancellationToken)
-        {
-            if (auditLogs.Count == 0)
-            {
-                return;
-            }
-
-            _isAuditing = true;
-            try
-            {
-                AuditLogs.AddRange(auditLogs);
-                await base.SaveChangesAsync(cancellationToken);
-            }
-            finally
-            {
-                _isAuditing = false;
-            }
         }
 
         private static int? TryGetActorUserId(ClaimsPrincipal? user)

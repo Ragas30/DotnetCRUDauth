@@ -1,4 +1,5 @@
 using DotnetCRUD.Models;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace DotnetCRUD.Repositories;
 
@@ -10,7 +11,7 @@ public interface IBookingRepository
     Task<List<Booking>> GetHistoryByVehicleIdAsync(int vehicleId);
     Task<Booking?> GetByIdAsync(int id);
     Task<Booking?> GetByIdForCustomerAsync(int id, int customerId);
-    Task<bool> IsTimeSlotTakenAsync(DateTime bookingDateTime, int serviceCatalogId);
-    Task<Booking> CreateAsync(Booking booking);
+    Task<Booking> CreateWithSlotGuardAsync(Booking booking, int durationMinutes);
     Task UpdateAsync(Booking booking);
+    Task<IDbContextTransaction> BeginTransactionAsync();
 }

@@ -16,26 +16,27 @@ public class VehicleRepository : IVehicleRepository
     public async Task<List<Vehicle>> GetByUserIdAsync(int userId)
     {
         return await _context.Vehicles
-            .Where(v => v.UserId == userId)
+            .Where(v => v.UserId == userId && !v.IsDeleted)
             .OrderByDescending(v => v.CreatedAt)
             .ToListAsync();
     }
 
     public async Task<Vehicle?> GetByIdAsync(int id)
     {
-        return await _context.Vehicles.FindAsync(id);
+        return await _context.Vehicles
+            .FirstOrDefaultAsync(v => v.Id == id && !v.IsDeleted);
     }
 
     public async Task<Vehicle?> GetByIdAndUserIdAsync(int id, int userId)
     {
         return await _context.Vehicles
-            .FirstOrDefaultAsync(v => v.Id == id && v.UserId == userId);
+            .FirstOrDefaultAsync(v => v.Id == id && v.UserId == userId && !v.IsDeleted);
     }
 
     public async Task<Vehicle?> GetByPlateNumberAsync(string plateNumber)
     {
         return await _context.Vehicles
-            .FirstOrDefaultAsync(v => v.PlateNumber == plateNumber);
+            .FirstOrDefaultAsync(v => v.PlateNumber == plateNumber && !v.IsDeleted);
     }
 
     public async Task<Vehicle> CreateAsync(Vehicle vehicle)
@@ -53,7 +54,9 @@ public class VehicleRepository : IVehicleRepository
 
     public async Task DeleteAsync(Vehicle vehicle)
     {
-        _context.Vehicles.Remove(vehicle);
+        vehicle.IsDeleted = true;
+        vehicle.UpdatedAt = DateTime.UtcNow;
+        _context.Vehicles.Update(vehicle);
         await _context.SaveChangesAsync();
     }
 }

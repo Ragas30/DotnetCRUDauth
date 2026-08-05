@@ -1,4 +1,5 @@
 using DotnetCRUD.DTOs.Product;
+using DotnetCRUD.Exceptions;
 using DotnetCRUD.Models;
 using DotnetCRUD.Repositories;
 
@@ -31,13 +32,13 @@ public class ProductService : IProductService
         }).ToList();
     }
 
-    public async Task<ProductResponseDto?> GetByIdAsync(int id)
+    public async Task<ProductResponseDto> GetByIdAsync(int id)
     {
         var product = await _productRepository.GetByIdAsync(id);
 
         if (product == null)
         {
-            return null;
+            throw new NotFoundException("PRODUCT_NOT_FOUND", "Product tidak ditemukan");
         }
 
         return new ProductResponseDto
@@ -69,13 +70,13 @@ public class ProductService : IProductService
         };
     }
 
-    public async Task<ProductResponseDto?> UpdateAsync(int id, UpdateProductDto updateDto)
+    public async Task<ProductResponseDto> UpdateAsync(int id, UpdateProductDto updateDto)
     {
         var product = await _productRepository.GetByIdAsync(id);
 
         if (product == null)
         {
-            return null;
+            throw new NotFoundException("PRODUCT_NOT_FOUND", "Product tidak ditemukan");
         }
 
         product.Name = updateDto.Name;
@@ -93,17 +94,16 @@ public class ProductService : IProductService
         };
     }
 
-    public async Task<bool> DeleteAsync(int id)
+    public async Task DeleteAsync(int id)
     {
         var product = await _productRepository.GetByIdAsync(id);
 
         if (product == null)
         {
-            return false;
+            throw new NotFoundException("PRODUCT_NOT_FOUND", "Product tidak ditemukan");
         }
 
         await _productRepository.DeleteAsync(product);
-        return true;
     }
 
 }

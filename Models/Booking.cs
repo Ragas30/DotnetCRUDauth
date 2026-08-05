@@ -15,6 +15,7 @@ public class Booking : AuditableEntity
     public DateTime? RecommendedNextServiceDate { get; set; }
     public int? RecommendedNextServiceMileage { get; set; }
     public int? MechanicId { get; set; }
+    public long Version { get; set; }
 
     public Vehicle? Vehicle { get; set; }
     public ServiceCatalog? ServiceCatalog { get; set; }

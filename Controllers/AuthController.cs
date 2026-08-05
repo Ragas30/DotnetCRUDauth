@@ -1,11 +1,7 @@
 using DotnetCRUD.DTOs.Auth;
 using DotnetCRUD.Services;
-using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace DotnetCRUD.Controllers;
 
@@ -14,79 +10,26 @@ namespace DotnetCRUD.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
-    private readonly IValidator<RegisterDto> _registerValidator;
-    private readonly IValidator<LoginDto> _loginValidator;
 
-    public AuthController(
-        IAuthService authService,
-        IValidator<RegisterDto> registerValidator,
-        IValidator<LoginDto> loginValidator)
+    public AuthController(IAuthService authService)
     {
         _authService = authService;
-        _registerValidator = registerValidator;
-        _loginValidator = loginValidator;
     }
 
     [HttpPost("register")]
     [AllowAnonymous]
     public async Task<IActionResult> Register(RegisterDto dto)
     {
-        var validationResult = await _registerValidator.ValidateAsync(dto);
-        if (!validationResult.IsValid)
-        {
-            return BadRequest(new
-            {
-                errors = validationResult.Errors.Select(error => new
-                {
-                    field = error.PropertyName,
-                    message = error.ErrorMessage
-                })
-            });
-        }
-
-        try
-        {
-            var result = await _authService.RegisterAsync(dto);
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new
-            {
-                message = ex.Message
-            });
-        }
+        var result = await _authService.RegisterAsync(dto);
+        return Ok(result);
     }
 
     [HttpPost("login")]
     [AllowAnonymous]
     public async Task<IActionResult> Login(LoginDto dto)
     {
-        var validationResult = await _loginValidator.ValidateAsync(dto);
-        if (!validationResult.IsValid)
-        {
-            return BadRequest(new
-            {
-                errors = validationResult.Errors.Select(error => new
-                {
-                    field = error.PropertyName,
-                    message = error.ErrorMessage
-                })
-            });
-        }
-
-        try
-        {
-            var result = await _authService.LoginAsync(dto);
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            return Unauthorized(new
-            {
-                message = ex.Message
-            });
-        }
+        var result = await _authService.LoginAsync(dto);
+        return Ok(result);
     }
 
     [Authorize(Roles = "ADMIN")]
@@ -94,15 +37,6 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> GetById(int id)
     {
         var user = await _authService.GetByIdAsync(id);
-
-        if (user == null)
-        {
-            return NotFound(new
-            {
-                message = "User tidak ditemukan"
-            });
-        }
-
         return Ok(user);
     }
 

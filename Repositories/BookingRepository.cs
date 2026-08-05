@@ -1,6 +1,9 @@
 using DotnetCRUD.Data;
+using DotnetCRUD.Exceptions;
 using DotnetCRUD.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using System.Data;
 
 namespace DotnetCRUD.Repositories;
 
@@ -55,25 +58,46 @@ public class BookingRepository : IBookingRepository
             .FirstOrDefaultAsync(b => b.Id == id && b.Vehicle != null && b.Vehicle.UserId == customerId);
     }
 
-    public async Task<bool> IsTimeSlotTakenAsync(DateTime bookingDateTime, int serviceCatalogId)
+    public async Task<Booking> CreateWithSlotGuardAsync(Booking booking, int durationMinutes)
     {
-        return await _context.Bookings.AnyAsync(b =>
-            b.BookingDateTime == bookingDateTime
-            && b.ServiceCatalogId == serviceCatalogId
-            && b.Status != BookingStatus.CANCELED);
-    }
+        await using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
 
-    public async Task<Booking> CreateAsync(Booking booking)
-    {
+        var slotTaken = await IsTimeSlotTakenAsync(booking.BookingDateTime, durationMinutes);
+        if (slotTaken)
+        {
+            throw new ConflictException("BOOKING_SLOT_TAKEN", "Slot booking pada waktu tersebut sudah terisi");
+        }
+
         _context.Bookings.Add(booking);
         await _context.SaveChangesAsync();
+        await transaction.CommitAsync();
         return booking;
     }
 
     public async Task UpdateAsync(Booking booking)
     {
+        booking.Version++;
         _context.Bookings.Update(booking);
         await _context.SaveChangesAsync();
+    }
+
+    public async Task<IDbContextTransaction> BeginTransactionAsync()
+    {
+        return await _context.Database.BeginTransactionAsync();
+    }
+
+    private async Task<bool> IsTimeSlotTakenAsync(DateTime startUtc, int durationMinutes)
+    {
+        var endUtc = startUtc.AddMinutes(durationMinutes);
+
+        return await (
+            from b in _context.Bookings
+            join s in _context.ServiceCatalogs on b.ServiceCatalogId equals s.Id
+            where b.Status != BookingStatus.CANCELED
+                  && b.BookingDateTime < endUtc
+                  && startUtc < b.BookingDateTime.AddMinutes(s.DurationMinutes)
+            select b.Id)
+            .AnyAsync();
     }
 
     private IQueryable<Booking> QueryWithIncludes()

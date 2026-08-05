@@ -1,4 +1,5 @@
 ﻿using DotnetCRUD.DTOs.Auth;
+using DotnetCRUD.Exceptions;
 using DotnetCRUD.Models;
 using DotnetCRUD.Repositories;
 using Microsoft.IdentityModel.Tokens;
@@ -16,13 +17,16 @@ public class AuthService : IAuthService
 {
     private readonly IUserRepository _userRepository;
     private readonly IConfiguration _configuration;
+    private readonly ILogger<AuthService> _logger;
 
     public AuthService(
         IUserRepository userRepository,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        ILogger<AuthService> logger)
     {
         _userRepository = userRepository;
         _configuration = configuration;
+        _logger = logger;
     }
 
     public async Task<AuthResponseDto> RegisterAsync(RegisterDto registerDto)
@@ -32,7 +36,7 @@ public class AuthService : IAuthService
 
         if (existingUser != null)
         {
-            throw new Exception("Email sudah terdaftar");
+            throw new ConflictException("EMAIL_TAKEN", "Email sudah terdaftar");
         }
 
         var user = new User
@@ -48,6 +52,8 @@ public class AuthService : IAuthService
         await _userRepository.CreateAsync(user);
 
         var token = GenerateJwtToken(user);
+
+        _logger.LogInformation("User baru terdaftar: {Email}, Role {Role}", user.Email, user.Role);
 
         return new AuthResponseDto
         {
@@ -70,7 +76,8 @@ public class AuthService : IAuthService
             )
         )
         {
-            throw new Exception("Email atau password salah");
+            _logger.LogWarning("Percobaan login gagal untuk {Email}", loginDto.Email);
+            throw new UnauthorizedException("INVALID_CREDENTIALS", "Email atau password salah");
         }
 
         var token = GenerateJwtToken(user);
@@ -113,10 +120,13 @@ public class AuthService : IAuthService
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    public async Task<UserResponseDto?> GetByIdAsync(int id)
+    public async Task<UserResponseDto> GetByIdAsync(int id)
     {
         var user = await _userRepository.GetByIdAsync(id);
-        if (user == null) return null;
+        if (user == null)
+        {
+            throw new NotFoundException("USER_NOT_FOUND", "User tidak ditemukan");
+        }
 
         return new UserResponseDto
         {

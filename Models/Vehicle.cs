@@ -9,6 +9,7 @@ public class Vehicle : AuditableEntity
     public string Model { get; set; } = string.Empty;
     public int Year { get; set; }
     public int CurrentMileage { get; set; }
+    public bool IsDeleted { get; set; }
 
     public User? User { get; set; }
     public ICollection<Booking> Bookings { get; set; } = new List<Booking>();

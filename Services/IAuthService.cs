@@ -10,6 +10,6 @@ public interface IAuthService
 
     Task<AuthResponseDto> LoginAsync(LoginDto loginDto);
 
-    Task<UserResponseDto?> GetByIdAsync(int id);
+    Task<UserResponseDto> GetByIdAsync(int id);
     Task<List<UserResponseDto>> GetAllUsersAsync();
 }

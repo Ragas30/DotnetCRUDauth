@@ -13,6 +13,7 @@ public class PaymentTransaction : AuditableEntity
     public string? ReferenceNumber { get; set; }
     public DateTime? PaidAt { get; set; }
     public string? RawNotificationPayload { get; set; }
+    public long Version { get; set; }
 
     public Booking? Booking { get; set; }
 }

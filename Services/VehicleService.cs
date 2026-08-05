@@ -1,4 +1,5 @@
 using DotnetCRUD.DTOs.Vehicle;
+using DotnetCRUD.Exceptions;
 using DotnetCRUD.Models;
 using DotnetCRUD.Repositories;
 using Microsoft.AspNetCore.Http;
@@ -27,11 +28,13 @@ public class VehicleService : IVehicleService
         return vehicles.Select(MapToResponse).ToList();
     }
 
-    public async Task<VehicleResponseDto?> GetMyVehicleByIdAsync(int id)
+    public async Task<VehicleResponseDto> GetMyVehicleByIdAsync(int id)
     {
         var userId = GetCurrentUserId();
         var vehicle = await _vehicleRepository.GetByIdAndUserIdAsync(id, userId);
-        return vehicle == null ? null : MapToResponse(vehicle);
+        return vehicle == null
+            ? throw new NotFoundException("VEHICLE_NOT_FOUND", "Kendaraan tidak ditemukan")
+            : MapToResponse(vehicle);
     }
 
     public async Task<VehicleResponseDto> CreateAsync(CreateVehicleDto dto)
@@ -40,7 +43,7 @@ public class VehicleService : IVehicleService
         var existing = await _vehicleRepository.GetByPlateNumberAsync(dto.PlateNumber.Trim().ToUpperInvariant());
         if (existing != null)
         {
-            throw new Exception("Nomor plat sudah terdaftar");
+            throw new ConflictException("DUPLICATE_PLATE_NUMBER", "Nomor plat sudah terdaftar");
         }
 
         var vehicle = new Vehicle
@@ -59,20 +62,20 @@ public class VehicleService : IVehicleService
         return MapToResponse(vehicle);
     }
 
-    public async Task<VehicleResponseDto?> UpdateAsync(int id, UpdateVehicleDto dto)
+    public async Task<VehicleResponseDto> UpdateAsync(int id, UpdateVehicleDto dto)
     {
         var userId = GetCurrentUserId();
         var vehicle = await _vehicleRepository.GetByIdAndUserIdAsync(id, userId);
         if (vehicle == null)
         {
-            return null;
+            throw new NotFoundException("VEHICLE_NOT_FOUND", "Kendaraan tidak ditemukan");
         }
 
         var normalizedPlate = dto.PlateNumber.Trim().ToUpperInvariant();
         var plateOwner = await _vehicleRepository.GetByPlateNumberAsync(normalizedPlate);
         if (plateOwner != null && plateOwner.Id != id)
         {
-            throw new Exception("Nomor plat sudah dipakai kendaraan lain");
+            throw new ConflictException("DUPLICATE_PLATE_NUMBER", "Nomor plat sudah dipakai kendaraan lain");
         }
 
         vehicle.PlateNumber = normalizedPlate;
@@ -87,17 +90,16 @@ public class VehicleService : IVehicleService
         return MapToResponse(vehicle);
     }
 
-    public async Task<bool> DeleteAsync(int id)
+    public async Task DeleteAsync(int id)
     {
         var userId = GetCurrentUserId();
         var vehicle = await _vehicleRepository.GetByIdAndUserIdAsync(id, userId);
         if (vehicle == null)
         {
-            return false;
+            throw new NotFoundException("VEHICLE_NOT_FOUND", "Kendaraan tidak ditemukan");
         }
 
         await _vehicleRepository.DeleteAsync(vehicle);
-        return true;
     }
 
     private int GetCurrentUserId()
@@ -105,7 +107,7 @@ public class VehicleService : IVehicleService
         var userIdValue = _httpContextAccessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (!int.TryParse(userIdValue, out var userId))
         {
-            throw new Exception("User tidak valid");
+            throw new UnauthorizedException("INVALID_USER", "User tidak valid");
         }
 
         return userId;
